@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>NFC Passport Reader</title>
+</head>
+<body>
+    <h1>NFC Passport Reader</h1>
+    <button id="scan-button">Scan Passport</button>
+    <pre id="output"></pre>
+
+    <script>
+        document.getElementById('scan-button').addEventListener('click', async () => {
+            try {
+                const ndef = new NDEFReader();
+                await ndef.scan();
+                console.log("NFC scan started");
+
+                ndef.onreading = event => {
+                    const message = event.message;
+                    for (const record of message.records) {
+                        console.log("Record type:  " + record.recordType);
+                        console.log("MIME type:    " + record.mediaType);
+                        console.log("Record id:    " + record.id);
+                        // Assuming the data is in text format for simplicity
+                        const textDecoder = new TextDecoder();
+                        console.log("Data:         " + textDecoder.decode(record.data));
+                        document.getElementById('output').textContent += textDecoder.decode(record.data) + '\n';
+                    }
+                };
+
+                ndef.onreadingerror = (e) => {
+                    console.error("Error reading NFC tag");
+                    document.getElementById('output').textContent = 'Error reading NFC tag'+JSON.stringify(e);
+                };
+
+            } catch (error) {
+                console.error("Error initializing NFC scan", error);
+                document.getElementById('output').textContent = 'Error initializing NFC scan: ' + error;
+            }
+        });
+    </script>
+</body>
+</html>
