@@ -1,43 +1,107 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>NFC Passport Reader</title>
+    <title>e-Passport Reader</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/axios/0.21.1/axios.min.js"></script>
 </head>
 <body>
-    <h1>NFC Passport Reader</h1>
-    <button id="scan-button">Scan Passport</button>
-    <pre id="output"></pre>
+    <p>
+        <button onclick="readTag()">Test NFC Read</button>
+        <button onclick="writeTag()">Test NFC Write</button>
+    </p>
+    <pre id="log"></pre>
+    <p><small>Based on the code snippets from <a href="https://w3c.github.io/web-nfc/#examples">specification draft</a>.</small></p>
 
     <script>
-        document.getElementById('scan-button').addEventListener('click', async () => {
-            try {
+        async function readTag() {
+            log("Starting NFC scan...");
+            if ("NDEFReader" in window) {
                 const ndef = new NDEFReader();
-                await ndef.scan();
-                console.log("NFC scan started");
+                try {
+                    await ndef.scan();
+                    log("NFC scan started.");
+                    ndef.onreading = async ({ message }) => {
+                        log("NFC tag read.");
+                        if (message.records.length == 0 || message.records[0].recordType == "empty") {
+                            await ndef.write({
+                                records: [{ recordType: "text", data: "Hello World" }]
+                            });
+                            log("Unformatted or empty tag, wrote default message.");
+                            return;
+                        }
 
-                ndef.onreading = event => {
-                    const message = event.message;
-                    for (const record of message.records) {
-                        console.log("Record type:  " + record.recordType);
-                        console.log("MIME type:    " + record.mediaType);
-                        console.log("Record id:    " + record.id);
-                        // Assuming the data is in text format for simplicity
-                        const textDecoder = new TextDecoder();
-                        console.log("Data:         " + textDecoder.decode(record.data));
-                        document.getElementById('output').textContent += textDecoder.decode(record.data) + '\n';
-                    }
-                };
+                        const decoder = new TextDecoder();
+                        for (const record of message.records) {
+                            switch (record.recordType) {
+                                case "text":
+                                    const textDecoder = new TextDecoder(record.encoding);
+                                    alert(`Text: ${textDecoder.decode(record.data)} (${record.lang})`);
+                                    break;
+                                case "url":
+                                    alert(`URL: ${decoder.decode(record.data)}`);
+                                    break;
+                                case "mime":
+                                    if (record.mediaType === "application/json") {
+                                        alert(`JSON: ${JSON.parse(decoder.decode(record.data))}`);
+                                    } else if (record.mediaType.startsWith("image/")) {
+                                        alert(`Image: ${record.mediaType}`);
+                                        const blob = new Blob([record.data], { type: record.mediaType });
 
-                ndef.onreadingerror = (e) => {
-                    console.error("Error reading NFC tag");
-                    document.getElementById('output').textContent = 'Error reading NFC tag'+JSON.stringify(e);
-                };
+                                        const img = document.createElement("img");
+                                        img.src = URL.createObjectURL(blob);
+                                        img.onload = () => window.URL.revokeObjectURL(img.src);
 
-            } catch (error) {
-                console.error("Error initializing NFC scan", error);
-                document.getElementById('output').textContent = 'Error initializing NFC scan: ' + error;
+                                        document.body.appendChild(img);
+                                    } else {
+                                        alert(`Media not handled: ${record.mediaType}`);
+                                    }
+                                    break;
+                                default:
+                                    alert(`Record not handled: ${record.recordType}`);
+                            }
+                        }
+                    };
+
+                    ndef.onreadingerror = event => {
+                        logErrorDetails(event);
+                    };
+                } catch (error) {
+                    log(`Error initializing NFC scan: ${error.message}`);
+                }
+            } else {
+                log("Web NFC is not supported.");
             }
-        });
+        }
+
+        async function writeTag() {
+            log("Starting NFC write...");
+            if ("NDEFReader" in window) {
+                const ndef = new NDEFReader();
+                try {
+                    await ndef.write("What Web Can Do Today");
+                    log("NDEF message written!");
+                } catch (error) {
+                    log(`Error writing NFC tag: ${error.message}`);
+                }
+            } else {
+                log("Web NFC is not supported.");
+            }
+        }
+
+        function log(data) {
+            const logElement = document.getElementById('log');
+            logElement.innerHTML += data + '\n';
+        }
+
+        function logErrorDetails(event) {
+            log("Reading error occurred.");
+            log("Event properties:");
+            for (const prop in event) {
+                if (event.hasOwnProperty(prop)) {
+                    log(`${prop}: ${event[prop]}`);
+                }
+            }
+        }
     </script>
 </body>
 </html>
